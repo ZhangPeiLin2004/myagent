@@ -1,0 +1,24 @@
+
+
+# Config.yaml file
+
+
+# Global model & stock prediction config
+llm:
+  model_name: hermes3:8b
+  ollama_base_url: http://127.0.0.1:11434
+  temperature: 0.7
+  max_ctx: 4096
+
+stock_predict:
+  target_gain_threshold: 1.5
+  model_prob_threshold: 0.62
+  window_days: 3
+  train_start: "2020-01-01"
+  train_end: "2024-12-31"
+  test_start: "2026-01-01"
+  test_end: "2026-07-03"
+
+db:
+  session_db_path: "../db/agent.db"
+  kline_sqlite_path: "../db/ashare_kline.db"
