@@ -1,24 +1,32 @@
-
-
-
-# main
-
+# 路径注入放在最顶部
 import sys
 import os
 PROJECT_ROOT = os.path.abspath(os.path.join(os.path.dirname(__file__), ".."))
 sys.path.insert(0, PROJECT_ROOT)
 
-# 下面原有所有导入不动
+# 全部导入
 from fastapi import FastAPI, Query
 from fastapi.responses import StreamingResponse
+from fastapi.middleware.cors import CORSMiddleware
 import json
 from backend.agent.graph import stock_agent_graph
 from backend.memory.session_memory import SessionMemoryManager
 from backend.common.constants import TaskType
 
-app = FastAPI(title="Hermes AStock Agent API")
-mem = SessionMemoryManager()
+# 只创建一次 app 实例，带上版本号
+app = FastAPI(title="Hermes AStock Agent API", version="0.1.0")
 
+# 在同一个app实例上添加跨域中间件
+app.add_middleware(
+    CORSMiddleware,
+    allow_origins=["http://localhost:3000"],
+    allow_credentials=True,
+    allow_methods=["*"],
+    allow_headers=["*"],
+)
+
+# 初始化内存管理器，只保留这一行
+mem = SessionMemoryManager()
 
 @app.post("/api/session/create")
 def create_session(name: str):
