@@ -1,17 +1,21 @@
-
-
-
 import sys
 import os
-root = os.path.abspath(os.path.join(os.path.dirname(__file__), ".."))
-sys.path.insert(0, root)
+FILE_DIR = os.path.dirname(os.path.abspath(__file__))
+ROOT_DIR = os.path.join(FILE_DIR, "../")
+sys.path.insert(0, ROOT_DIR)
 
-from backend.db.kline_db import AShareKlineDB
 from backend.config import settings
+from backend.db.kline_db import KlineDB
 
-if __name__ == "__main__":
-    print("Kline DB Path:", settings.KLINE_DB_PATH)
-    db = AShareKlineDB()
-    res = db.query_three_day_window("000001.SZ", "2026-07-03")
-    print("Query result length:", len(res))
-    db.close()
+print(f"Kline DB Path: {settings.KLINE_DB_PATH}")
+db = KlineDB()
+
+# 纯数字代码 + 导出截止日期
+res = db.query_three_day_window("000001", "2026-07-20")
+print(f"Query result length: {len(res)}")
+print(res)
+
+# 额外校验总条数
+count = db.get_total_count("000001")
+print(f"单只股票总记录：{count}")
+db.close()

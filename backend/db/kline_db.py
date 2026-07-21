@@ -1,31 +1,35 @@
-
-
-
-# backend/db/kline_db.py
 import sys
 import os
-project_root = os.path.abspath(os.path.join(os.path.dirname(__file__), "../.."))
-sys.path.insert(0, project_root)
-
 import sqlite3
 from datetime import datetime, timedelta
-from backend.common.constants import DATE_FMT
-from backend.config import settings
 
-class AShareKlineDB:
+# 统一项目根路径注入
+FILE_DIR = os.path.abspath(os.path.dirname(__file__))
+ROOT_DIR = os.path.abspath(os.path.join(FILE_DIR, "../"))
+sys.path.insert(0, ROOT_DIR)
+
+from backend.config import settings
+from backend.config.settings import KLINE_DB_PATH, DATE_FMT
+
+class KlineDB:
     def __init__(self):
-        self.conn = sqlite3.connect(settings.KLINE_DB_PATH, check_same_thread=False)
+        # 全局持久连接，放开线程校验（本地开发调试可用）
+        self.db_path = settings.KLINE_DB_PATH
+        self.conn = sqlite3.connect(self.db_path, check_same_thread=False)
         self.cur = self.conn.cursor()
 
     def query_three_day_window(self, code: str, end_dt: str):
         dt_obj = datetime.strptime(end_dt, DATE_FMT)
         days = []
-        for offset in [2,1,0]:
-            q_dt = (dt_obj - timedelta(days=offset)).strftime(DATE_FMT)
+        current_dt = dt_obj
+    
+        # 向前循环查找，收集3条有效行情
+        while len(days) < 3:
+            date_str = current_dt.strftime(DATE_FMT)
             self.cur.execute("""
                 SELECT date,open,high,low,close,pre_close,volume,amount
                 FROM kline WHERE code=? AND date=?
-            """, (code, q_dt))
+            """, (code, date_str))
             row = self.cur.fetchone()
             if row:
                 days.append({
@@ -38,16 +42,30 @@ class AShareKlineDB:
                     "volume": row[6],
                     "amount": row[7]
                 })
+            # 往前推一天
+            current_dt = current_dt - timedelta(days=1)
+            # 防止死循环，最多往前查90天
+            if (dt_obj - current_dt).days > 90:
+                break
+    
+        valid_len = len(days)
+        if valid_len != 3:
+            raise ValueError(f"Kline data incomplete, expected 3 continuous trading days, got {valid_len} records")
+        # 反转，按时间升序返回（最早在前）
+        days = list(reversed(days))
         return days
 
-    def query_date_range(self, code: str, start: str, end: str):
-        self.cur.execute("""
-            SELECT date,open,high,low,close,pre_close,volume,amount
-            FROM kline WHERE code=? AND date BETWEEN ? AND ? ORDER BY date ASC
-        """, (code, start, end))
-        res = []
-        for r in self.cur.fetchall():
-            res.append({
+    
+    def query_date_range(self, code: str, start_date: str, end_date: str):
+        sql = """
+            SELECT date, open, high, low, close, pre_close, volume, amount
+            FROM kline WHERE code = ? AND date BETWEEN ? AND ? ORDER BY date ASC
+        """
+        self.cur.execute(sql, (code, start_date, end_date))
+        rows = self.cur.fetchall()
+        result = []
+        for r in rows:
+            result.append({
                 "date": r[0],
                 "open": r[1],
                 "high": r[2],
@@ -57,7 +75,27 @@ class AShareKlineDB:
                 "volume": r[6],
                 "amount": r[7]
             })
-        return res
+        return result
+
+
+    def batch_insert_kline(self, batch):
+        """批量插入CSV数据，给导入脚本调用"""
+        insert_sql = """
+        INSERT OR IGNORE INTO kline
+        (code, date, open, high, low, close, pre_close, volume, amount)
+        VALUES (?,?,?,?,?,?,?,?,?)
+        """
+        self.cur.executemany(insert_sql, batch)
+        self.conn.commit()
+        print(f"批量插入完成，共 {len(batch)} 条记录")
+
+    def get_total_count(self, stock_code: str = None):
+        """校验数据库记录总数"""
+        if stock_code:
+            self.cur.execute("SELECT COUNT(*) FROM kline WHERE code=?", (stock_code,))
+        else:
+            self.cur.execute("SELECT COUNT(*) FROM kline")
+        return self.cur.fetchone()[0]
 
     def close(self):
         self.conn.close()

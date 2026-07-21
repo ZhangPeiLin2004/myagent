@@ -1,48 +1,49 @@
+import sys
+import os
 
+# 获取当前脚本路径
+CUR_FILE = os.path.abspath(__file__)
+# tools目录
+TOOLS_DIR = os.path.dirname(CUR_FILE)
+# 向上一层拿到 backend
+BACKEND_DIR = os.path.dirname(TOOLS_DIR)
+# 再向上拿到项目根目录 my_agent
+ROOT_DIR = os.path.dirname(BACKEND_DIR)
+# 插入根目录到sys.path
+if ROOT_DIR not in sys.path:
+    sys.path.insert(0, ROOT_DIR)
 
-# Data Query
+from backend.db.kline_db import KlineDB
 
-# tools/data_query_tool.py
-from backend.tools.base_tool import BaseTool, ToolParamSchema, ToolReturn
-from backend.db.kline_db import AShareKlineDB
-
-class DataQueryTool(BaseTool):
-    name = "get_3day_kline"
-    description = "根据股票代码与结束日期，查询连续3日A股日线行情(t-2, t-1, t)，用于3日窗口模型预测"
-    timeout = 15000
-    params_schema = [
-        ToolParamSchema(
-            name="stock_code",
-            type="string",
-            description="沪深A股股票代码，如000001.SZ、600036.SH",
-            required=True
-        ),
-        ToolParamSchema(
-            name="end_date",
-            type="string",
-            description="窗口结束日期，格式YYYY-MM-DD，将自动向前取t-2、t-1、t三天",
-            required=True
-        )
-    ]
-
+class DataQueryTool:
     def __init__(self):
-        super().__init__()
-        self.db = AShareKlineDB()
+        self.kline_db = KlineDB()
 
-    def run(self, stock_code: str, end_date: str) -> ToolReturn:
-        kline_list = self.db.query_three_day_window(code=stock_code, end_dt=end_date)
-        if len(kline_list) != 3:
-            return ToolReturn(
-                success=False,
-                data=kline_list,
-                error_msg=f"行情数据不足3条，仅获取到{len(kline_list)}条，存在停牌或日期越界",
-                cost_ms=0,
-                call_id=self._call_id
-            )
-        return ToolReturn(
-            success=True,
-            data=kline_list,
-            error_msg=None,
-            cost_ms=0,
-            call_id=self._call_id
-        )
+    def get_recent_3_trade_data(self, stock_code: str):
+        """获取股票最近3个交易日行情，供预测模型使用"""
+        try:
+            data = self.kline_db.query_three_day_window(stock_code, "2026-07-20")
+            return {
+                "code": stock_code,
+                "data": data,
+                "success": True
+            }
+        except Exception as e:
+            return {
+                "success": False,
+                "msg": str(e)
+            }
+
+    def get_stock_range_data(self, stock_code: str, start: str, end: str):
+        data = self.kline_db.query_date_range(stock_code, start, end)
+        return {"code": stock_code, "list": data}
+
+    def close(self):
+        self.kline_db.close()
+
+if __name__ == "__main__":
+    tool = DataQueryTool()
+    res = tool.get_recent_3_trade_data("000001")
+    print("工具查询结果：")
+    print(res)
+    tool.close()
