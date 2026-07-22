@@ -41,8 +41,11 @@
           <span :class="predictData.predict_result === 'up' ? 'text-green' : 'text-red'">
             {{ predictData.predict_result === "up" ? "看涨 UP" : "看跌 DOWN" }}
           </span>
-          <span class="ml-3">上涨概率：{{ (predictData.predict_prob * 100).toFixed(2) }}%</span>
         </h4>
+        <p>预测涨跌幅中位数：<strong>{{ predictData.pred_pct_median }} %</strong></p>
+        <p>{{predictData.confidence}}置信区间：
+          [{{predictData.pred_pct_low}} %, {{predictData.pred_pct_high}} %]
+        </p>
         <h5>原始三日K线数据</h5>
         <pre>{{ JSON.stringify(predictData.raw_3day_data, null, 2) }}</pre>
       </div>
@@ -72,7 +75,7 @@ const loadSession = async () => {
   }
 }
 
-// ========== 股票模块【修复loading】 ==========
+// ========== 股票模块 ==========
 const stockCode = ref('000001')
 const predictData = ref(null)
 const errMsg = ref('')
@@ -87,7 +90,7 @@ const trainModel = async () => {
   loading.value.train = true
   try {
     const res = await trainStockModel(stockCode.value)
-    alert(`训练完成！准确率：${res.data.accuracy}`)
+    alert(`训练完成！${res.data.msg}`)
   } catch (err) {
     errMsg.value = "训练失败：" + err.message
     console.error(err)
